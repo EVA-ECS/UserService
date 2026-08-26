@@ -1,44 +1,114 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using StackExchange.Redis;
+using UserService.Configuration;
+using UserService.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.WebHost.UseUrls("http://0.0.0.0:8080");
+
+var supabaseUrl =
+    builder.Configuration["Supabase:Url"]?.TrimEnd('/');
+
+if (string.IsNullOrWhiteSpace(supabaseUrl))
+{
+    throw new InvalidOperationException(
+        "Die Konfiguration Supabase:Url fehlt."
+    );
+}
+
+var redisConnectionString =
+    builder.Configuration["Redis:ConnectionString"]
+    ?? "redis:6379";
+
+builder.Services
+    .AddOptions<SupabaseOptions>()
+    .Bind(
+        builder.Configuration.GetSection(
+            SupabaseOptions.SectionName
+        )
+    )
+    .Validate(
+        options => Uri.TryCreate(
+            options.Url,
+            UriKind.Absolute,
+            out _
+        ),
+        "Supabase:Url ist ungültig."
+    )
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(
+            options.PublishableKey
+        ),
+        "Supabase:PublishableKey fehlt."
+    )
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(
+            options.SecretKey
+        ),
+        "Supabase:SecretKey fehlt."
+    )
+    .ValidateOnStart();
+
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddHttpClient<
+    ISupabaseAuthClient,
+    SupabaseAuthClient
+>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(20);
+});
+
+builder.Services.AddSingleton<IConnectionMultiplexer>(
+    ConnectionMultiplexer.Connect(redisConnectionString)
+);
+
+builder.Services.AddScoped<
+    IUserDirectoryService,
+    UserDirectoryService
+>();
+
+var supabaseIssuer = $"{supabaseUrl}/auth/v1";
+
+builder.Services
+    .AddAuthentication(
+        JwtBearerDefaults.AuthenticationScheme
+    )
+    .AddJwtBearer(options =>
+    {
+        options.Authority = supabaseIssuer;
+        options.Audience = "authenticated";
+        options.RequireHttpsMetadata = true;
+
+        options.TokenValidationParameters =
+            new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                ValidateIssuer = true,
+                ValidIssuer = supabaseIssuer,
+                ValidateAudience = true,
+                ValidAudience = "authenticated",
+                ValidateLifetime = true
+            };
+    });
+
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi();
+app.MapControllers();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
