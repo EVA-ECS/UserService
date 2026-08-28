@@ -1,0 +1,11 @@
+using UserService.Models;
+
+namespace UserService.Services;
+
+public interface IUserDirectoryService
+{
+    Task<IReadOnlyList<UserDirectoryEntryResponse>> GetUsersAsync(
+        string currentUserId,
+        CancellationToken cancellationToken
+    );
+}
