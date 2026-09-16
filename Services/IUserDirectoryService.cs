@@ -8,4 +8,17 @@ public interface IUserDirectoryService
         string currentUserId,
         CancellationToken cancellationToken
     );
+
+    Task<PublicKeyResponse>
+    PublishPublicKeyAsync(
+        string currentUserId,
+        PublishPublicKeyRequest request,
+        CancellationToken cancellationToken
+    );
+
+    Task<PublicKeyResponse?>
+    GetPublicKeyAsync(
+        string userId,
+        CancellationToken cancellationToken
+    );
 }

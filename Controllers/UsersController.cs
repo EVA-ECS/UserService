@@ -64,4 +64,120 @@ public sealed class UsersController : ControllerBase
             );
         }
     }
+
+    [HttpPut("me/public-key")]
+    public async Task<ActionResult<PublicKeyResponse>>
+        PublishPublicKey(
+            [FromBody]
+                PublishPublicKeyRequest request,
+            CancellationToken cancellationToken
+        )
+    {
+        var currentUserId =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier
+            )?.Value
+            ?? User.FindFirst("sub")?.Value;
+
+        if (
+            string.IsNullOrWhiteSpace(
+                currentUserId
+            )
+        )
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var result =
+                await _directory
+                    .PublishPublicKeyAsync(
+                        currentUserId,
+                        request,
+                        cancellationToken
+                    );
+
+            return Ok(result);
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(
+                new ApiErrorResponse(
+                    "invalid_public_key",
+                    exception.Message
+                )
+            );
+        }
+        catch (Exception exception)
+            when (
+                exception
+                    is not OperationCanceledException
+            )
+        {
+            _logger.LogError(
+                exception,
+                "Der Public Key konnte nicht gespeichert werden."
+            );
+
+            return StatusCode(
+                StatusCodes
+                    .Status503ServiceUnavailable,
+                new ApiErrorResponse(
+                    "public_key_service_unavailable",
+                    "Der Public Key konnte momentan nicht gespeichert werden."
+                )
+            );
+        }
+    }
+
+    [HttpGet("{userId:guid}/public-key")]
+    public async Task<ActionResult<PublicKeyResponse>>
+        GetPublicKey(
+            Guid userId,
+            CancellationToken cancellationToken
+        )
+    {
+        try
+        {
+            var result =
+                await _directory
+                    .GetPublicKeyAsync(
+                        userId.ToString(),
+                        cancellationToken
+                    );
+
+            if (result is null)
+            {
+                return NotFound(
+                    new ApiErrorResponse(
+                        "public_key_not_found",
+                        "Für diesen Nutzer wurde noch kein Public Key veröffentlicht."
+                    )
+                );
+            }
+
+            return Ok(result);
+        }
+        catch (Exception exception)
+            when (
+                exception
+                    is not OperationCanceledException
+            )
+        {
+            _logger.LogError(
+                exception,
+                "Der Public Key konnte nicht geladen werden."
+            );
+
+            return StatusCode(
+                StatusCodes
+                    .Status503ServiceUnavailable,
+                new ApiErrorResponse(
+                    "public_key_service_unavailable",
+                    "Der Public Key konnte momentan nicht geladen werden."
+                )
+            );
+        }
+    }
 }

@@ -240,6 +240,105 @@ public sealed class SupabaseAuthClient : ISupabaseAuthClient
             .ToArray();
     }
 
+    public async Task StorePublicKeyAsync(
+    string userId,
+    SupabaseStoredPublicKey publicKey,
+    CancellationToken cancellationToken
+)
+{
+    using var request = CreateRequest(
+        HttpMethod.Put,
+        $"/auth/v1/admin/users/{Uri.EscapeDataString(userId)}",
+        _secretKey,
+        _secretKey
+    );
+
+    request.Content = JsonContent.Create(new
+    {
+        user_metadata = new
+        {
+            e2ee_public_key = new
+            {
+                key_id =
+                    publicKey.KeyId,
+                public_key =
+                    publicKey.PublicKey,
+                updated_at =
+                    publicKey.UpdatedAt
+            }
+        }
+    });
+
+    using var response =
+        await _httpClient.SendAsync(
+            request,
+            cancellationToken
+        );
+
+    await EnsureSuccessAsync(response);
+}
+
+    public async Task<SupabaseStoredPublicKey?>
+        GetPublicKeyAsync(
+            string userId,
+            CancellationToken cancellationToken
+        )
+    {
+        using var request = CreateRequest(
+            HttpMethod.Get,
+            $"/auth/v1/admin/users/{Uri.EscapeDataString(userId)}",
+            _secretKey,
+            _secretKey
+        );
+
+        using var response =
+            await _httpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken
+            );
+
+        if (
+            response.StatusCode ==
+            HttpStatusCode.NotFound
+        )
+        {
+            return null;
+        }
+
+        await EnsureSuccessAsync(response);
+
+        var user = await response.Content
+            .ReadFromJsonAsync<SupabaseUser>(
+                JsonOptions,
+                cancellationToken
+            );
+
+        if (
+            user is null ||
+            string.IsNullOrWhiteSpace(user.Id)
+        )
+        {
+            throw new InvalidOperationException(
+                "Supabase hat keine gültige Nutzerantwort geliefert."
+            );
+        }
+
+        var metadata =
+            user.UserMetadata?.E2eePublicKey;
+
+        if (metadata is null)
+        {
+            return null;
+        }
+
+        return new SupabaseStoredPublicKey(
+            metadata.KeyId ?? string.Empty,
+            metadata.PublicKey ?? string.Empty,
+            metadata.UpdatedAt ?? DateTimeOffset.MinValue
+        );
+    }
+
     private async Task<AuthSessionResponse> RequestSessionAsync(
         string path,
         Dictionary<string, string> body,
@@ -395,5 +494,33 @@ public sealed class SupabaseAuthClient : ISupabaseAuthClient
 
         [JsonPropertyName("email_confirmed_at")]
         public DateTimeOffset? EmailConfirmedAt { get; init; }
+
+        [JsonPropertyName("user_metadata")]
+        public SupabaseUserMetadata? UserMetadata { get; init; }
+    }
+
+    private sealed class SupabaseUserMetadata
+    {
+        [JsonPropertyName("e2ee_public_key")]
+        public SupabasePublicKeyMetadata?
+            E2eePublicKey { get; init; }
+    }
+
+    private sealed class SupabasePublicKeyMetadata
+    {
+        [JsonPropertyName("key_id")]
+        public string? KeyId { get; init; }
+
+        [JsonPropertyName("public_key")]
+        public string? PublicKey {
+            get;
+            init;
+        }
+
+        [JsonPropertyName("updated_at")]
+        public DateTimeOffset? UpdatedAt {
+            get;
+            init;
+        }
     }
 }

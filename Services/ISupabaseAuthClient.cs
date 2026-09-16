@@ -29,4 +29,15 @@ public interface ISupabaseAuthClient
     Task<IReadOnlyList<SupabaseDirectoryUser>> GetConfirmedUsersAsync(
         CancellationToken cancellationToken
     );
+
+    Task StorePublicKeyAsync(
+        string userId,
+        SupabaseStoredPublicKey publicKey,
+        CancellationToken cancellationToken
+    );
+
+    Task<SupabaseStoredPublicKey?> GetPublicKeyAsync(
+        string userId,
+        CancellationToken cancellationToken
+    );
 }

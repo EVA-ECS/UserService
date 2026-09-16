@@ -52,6 +52,30 @@ public sealed record UserDirectoryEntryResponse(
     bool IsOnline
 );
 
+public sealed record PublishPublicKeyRequest
+{
+    [Required]
+    [StringLength(
+        512,
+        MinimumLength = 1
+    )]
+    public string PublicKey { get; init; } =
+        string.Empty;
+}
+
+public sealed record PublicKeyResponse(
+    string UserId,
+    string KeyId,
+    string PublicKey,
+    DateTimeOffset UpdatedAt
+);
+
+public sealed record SupabaseStoredPublicKey(
+    string KeyId,
+    string PublicKey,
+    DateTimeOffset UpdatedAt
+);
+
 public sealed record ApiErrorResponse(
     string Code,
     string Message
