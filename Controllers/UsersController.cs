@@ -131,7 +131,7 @@ public sealed class UsersController : ControllerBase
         }
     }
 
-    [HttpGet("{userId:guid}/public-key")]
+    [HttpGet("{userId}/public-key")]
     public async Task<ActionResult<PublicKeyResponse>>
         GetPublicKey(
             Guid userId,
