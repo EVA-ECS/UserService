@@ -13,4 +13,11 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="tests\**\*.cs" />
+    <Content Remove="tests\**\*" />
+    <None Remove="tests\**\*" />
+    <Content Remove="package.json;package-lock.json;.config\**\*" />
+    <None Remove="package.json;package-lock.json;.config\**\*" />
+  </ItemGroup>
 </Project>
